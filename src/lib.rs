@@ -1,9 +1,6 @@
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::{Aes128Dec, Aes128Enc};
-use cipher::{
-    consts::{U16, U8},
-    generic_array::GenericArray,
-};
+use cipher::{consts::U16, generic_array::GenericArray};
 
 use core::arch::x86_64::{
     __m128i, _mm_and_si128, _mm_loadu_si128, _mm_or_si128, _mm_set_epi64x, _mm_set_epi8,
@@ -11,23 +8,6 @@ use core::arch::x86_64::{
     _mm_srai_epi32, _mm_srli_epi64, _mm_storeu_si128, _mm_xor_si128,
 };
 use std::mem;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum EncryptionError {
-    #[error("The provided ciphertext buffer was too small.")]
-    ShortCiphertext,
-}
-
-#[derive(Debug, Error)]
-pub enum DecryptionError {
-    #[error("Ciphertext did not include a complete tag.")]
-    MissingTag,
-    #[error("Tag verification failed.")]
-    InvalidTag,
-    #[error("The provided plaintext buffer was too small.")]
-    ShortPlaintext,
-}
 
 #[inline]
 unsafe fn aes_encrypt(_in: __m128i, cipher: &Aes128Enc) -> __m128i {
