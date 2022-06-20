@@ -1,0 +1,17 @@
+[build]
+rustflags = [
+  "-Ctarget-feature=+aes,+avx,+avx2,+sse,+sse2,+sse4.1,+sse4.2,+ssse3,+pclmulqdq,+rdrand,+rdseed",
+  "-Cllvm-args=-x86-asm-syntax=intel",
+]
+rustdocflags = [
+  "-Ctarget-feature=+aes,+avx,+avx2,+sse,+sse2,+sse4.1,+sse4.2,+ssse3,+pclmulqdq,+rdrand,+rdseed",
+  "-Cllvm-args=-x86-asm-syntax=intel",
+]
+
+[test]
+rustflags = [
+  "-Ctarget-feature=+aes,+avx,+avx2,+sse,+sse2,+sse4.1,+sse4.2,+ssse3,+pclmulqdq,+rdrand,+rdseed",
+]
+rustdocflags = [
+  "-Ctarget-feature=+aes,+avx,+avx2,+sse,+sse2,+sse4.1,+sse4.2,+ssse3,+pclmulqdq,+rdrand,+rdseed",
+]

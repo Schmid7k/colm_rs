@@ -1,10 +1,33 @@
-#![feature(stdsimd)]
-
-use aes::cipher::consts::U16;
-use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
+use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::{Aes128Dec, Aes128Enc};
-use core::arch::x86_64::*;
+use cipher::{
+    consts::{U16, U8},
+    generic_array::GenericArray,
+};
+
+use core::arch::x86_64::{
+    __m128i, _mm_and_si128, _mm_loadu_si128, _mm_or_si128, _mm_set_epi64x, _mm_set_epi8,
+    _mm_setzero_si128, _mm_shuffle_epi32, _mm_shuffle_epi8, _mm_slli_epi64, _mm_slli_si128,
+    _mm_srai_epi32, _mm_srli_epi64, _mm_storeu_si128, _mm_xor_si128,
+};
 use std::mem;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum EncryptionError {
+    #[error("The provided ciphertext buffer was too small.")]
+    ShortCiphertext,
+}
+
+#[derive(Debug, Error)]
+pub enum DecryptionError {
+    #[error("Ciphertext did not include a complete tag.")]
+    MissingTag,
+    #[error("Tag verification failed.")]
+    InvalidTag,
+    #[error("The provided plaintext buffer was too small.")]
+    ShortPlaintext,
+}
 
 #[inline]
 unsafe fn aes_encrypt(_in: __m128i, cipher: &Aes128Enc) -> __m128i {
@@ -41,7 +64,7 @@ unsafe fn gf128_mul2(x: &__m128i) -> __m128i {
     let x2 = _mm_or_si128(
         // Bitwise OR between
         _mm_slli_epi64(*x, 1), // x shifted left by 1 (equals multiplication by 2)
-        _mm_srli_epi64(_mm_slli_si128::<8>(*x), 63), // and x shifted left by 8 and shifted right by 63. Why this?
+        _mm_srli_epi64(_mm_slli_si128::<8>(*x), 63), // and x shifted left by 8 and shifted right by 63.
     );
 
     _mm_xor_si128(x2, _mm_and_si128(redpoly, mask)) // Return bitwise XOR of x2 with the bitwise AND between the irreducible polynomial and mask
