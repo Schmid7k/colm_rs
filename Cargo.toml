@@ -12,12 +12,11 @@ rand = "0.8.5"
 
 [dependencies]
 aes = "0.8.1"
-thiserror = "1.0.31"
 cipher = "0.4.3"
 
 [profile.bench]
 #opt-level = 3
-#codegen-units = 1        # Uncomment for AMD
+#codegen-units = 1 # Uncomment for AMD
 #debug = false
 #debug-assertions = false
 #lto = "fat"

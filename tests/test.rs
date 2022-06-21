@@ -1,5 +1,4 @@
-use aes::cipher::generic_array::GenericArray;
-use colm::{crypto_aead_decrypt, crypto_aead_encrypt};
+use colm::colm0::*;
 
 #[test]
 fn extensive_test_suite() {
@@ -73,36 +72,19 @@ fn extensive_test_suite() {
 
     for (n, nonce) in nonces.iter().enumerate() {
         for (k, key) in keys.iter().enumerate() {
+            let enc = Colm0Enc::new(key.into());
+            let dec = Colm0Dec::new(key.into());
             for (a, ad) in ad.iter().enumerate() {
                 for p in plaintexts.iter().map(|s| s.as_bytes()) {
-                    let mut m = p.to_vec();
-                    let mut c = vec![0; p.len() + 16];
-                    let size = m.len();
+                    let size = p.len();
                     println!("Verifying n={}, k={}, a={}, p={}", n, k, a, size);
 
                     println!("E+D ");
                     println!("adlen={}", ad.len());
-                    println!("len={}", m.len());
-                    unsafe {
-                        crypto_aead_encrypt(
-                            &mut c,
-                            &m,
-                            ad.as_bytes(),
-                            nonce,
-                            &GenericArray::from(*key),
-                        );
-                    };
+                    println!("len={}", p.len());
+                    let c = enc.seal(p, ad.as_bytes(), nonce);
                     println!("clen={}", c.len());
-
-                    unsafe {
-                        crypto_aead_decrypt(
-                            &mut m,
-                            &c,
-                            ad.as_bytes(),
-                            nonce,
-                            &GenericArray::from(*key),
-                        );
-                    };
+                    let m = dec.open(&c, ad.as_bytes(), nonce).expect("LOL");
 
                     assert!(m == p);
                 }
