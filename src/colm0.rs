@@ -1,11 +1,15 @@
 use super::arch::*;
 use super::primitives::*;
+use super::{DecryptionError, EncryptionError};
 use aes::{Aes128Dec, Aes128Enc};
 use cipher::inout::NotEqualError;
 use cipher::{consts::U16, generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
 
 use core::simd::u8x16;
 
+/// COLM authenticated encryption with associated data.
+///
+/// Representation of COLM0, no intermediate tag generation. (encryption-only)
 pub struct Colm0Enc {
     aes: Aes128Enc,
 }
@@ -160,8 +164,17 @@ impl Colm0Enc {
         }
     }
 
-    pub fn seal_into(&self, c: &mut [u8], m: &[u8], ad: &[u8], nonce: &[u8; 8]) {
+    pub fn seal_into(
+        &self,
+        c: &mut [u8],
+        m: &[u8],
+        ad: &[u8],
+        nonce: &[u8; 8],
+    ) -> Result<usize, EncryptionError> {
         unsafe {
+            if c.len() - m.len() < 16 {
+                return Err(EncryptionError::ShortCiphertext);
+            }
             let mut buf = [0u8; 16];
 
             let (mut w, mut block, mut lup, mut ldown, mut inb): (
@@ -229,7 +242,7 @@ impl Colm0Enc {
             out += 16;
 
             if remaining == 0 {
-                return;
+                return Ok(c.len());
             }
 
             lup = gf128_mul2(&lup);
@@ -245,10 +258,14 @@ impl Colm0Enc {
 
             _mm_storeu_si128(buf.as_ptr() as *mut __m128i, byte_swap(block));
             c[out..].copy_from_slice(&buf[..remaining]);
+            Ok(c.len())
         }
     }
 }
 
+/// COLM authenticated encryption with associated data.
+///
+/// Representation of COLM0, no intermediate tag generation. (decryption-only)
 pub struct Colm0Dec {
     aes_dec: Aes128Dec,
     aes_enc: Aes128Enc,
@@ -321,7 +338,7 @@ impl Colm0Dec {
         }
     }
 
-    pub fn open(&self, c: &[u8], ad: &[u8], nonce: &[u8; 8]) -> Result<Vec<u8>, NotEqualError> {
+    pub fn open(&self, c: &[u8], ad: &[u8], nonce: &[u8; 8]) -> Result<Vec<u8>, DecryptionError> {
         unsafe {
             let buf = [0u8; 16];
             let (mut w, mut block, mut lup, mut ldown, mut inb): (
@@ -339,7 +356,7 @@ impl Colm0Dec {
             let mut remaining = c.len() - 16;
 
             if c.len() < 16 {
-                return Err(NotEqualError);
+                return Err(DecryptionError::MissingTag);
             }
 
             let mut m = vec![0u8; remaining];

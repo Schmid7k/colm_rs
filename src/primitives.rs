@@ -1,5 +1,6 @@
 use super::arch::*;
 
+/// Byte swap necessary for operation on Intel systems, because they use little-endian encoding in registers.
 #[inline]
 pub(crate) fn byte_swap(x: __m128i) -> __m128i {
     unsafe {
@@ -8,6 +9,7 @@ pub(crate) fn byte_swap(x: __m128i) -> __m128i {
     }
 }
 
+/// Polynomial multiplication with 2 in the Galois field G^128
 #[inline]
 pub(crate) fn gf128_mul2(x: &__m128i) -> __m128i {
     unsafe {
@@ -22,16 +24,19 @@ pub(crate) fn gf128_mul2(x: &__m128i) -> __m128i {
             _mm_slli_epi64(*x, 1), // x shifted left by 1 (equals multiplication by 2)
             _mm_srli_epi64(_mm_slli_si128::<8>(*x), 63), // and x shifted left by 8 and shifted right by 63.
         );
-
-        _mm_xor_si128(x2, _mm_and_si128(redpoly, mask)) // Return bitwise XOR of x2 with the bitwise AND between the irreducible polynomial and mask
+        // Return bitwise XOR of x2 with the bitwise AND between the irreducible polynomial and mask
+        // Rules out the reducing polynomial if mask is 0
+        _mm_xor_si128(x2, _mm_and_si128(redpoly, mask))
     }
 }
 
+/// Polynomial multiplication with 3 in the Galois field G^128
 #[inline]
 pub(crate) fn gf128_mul3(x: &__m128i) -> __m128i {
     unsafe { _mm_xor_si128(gf128_mul2(x), *x) }
 }
 
+/// Polynomial multiplication with 7 in the Galois field G^128
 #[inline]
 pub(crate) fn gf128_mul7(x: &__m128i) -> __m128i {
     unsafe {
@@ -42,6 +47,7 @@ pub(crate) fn gf128_mul7(x: &__m128i) -> __m128i {
     }
 }
 
+/// Inplace implementation of COLM's rho function.
 #[inline]
 pub(crate) fn rho(block: &mut __m128i, w: &mut __m128i) {
     unsafe {
@@ -51,6 +57,7 @@ pub(crate) fn rho(block: &mut __m128i, w: &mut __m128i) {
     }
 }
 
+/// Inplace implementation of COLM's inverse rho function.
 #[inline]
 pub(crate) fn rho_inv(block: &mut __m128i, w: &mut __m128i) {
     unsafe {
