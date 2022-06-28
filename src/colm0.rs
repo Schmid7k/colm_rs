@@ -292,71 +292,28 @@ where
     }
 }
 
-struct BcEnc<E> {
+struct BcEnc<E>
+where
+    E: BlockCipher + BlockSizeUser<BlockSize = U16> + BlockEncrypt + KeyInit,
+{
     enc: E,
 }
 
-impl<E> KeySizeUser for BcEnc<E>
+struct BcDec<D>
 where
-    E: KeyInit,
+    D: BlockCipher + BlockSizeUser<BlockSize = U16> + BlockDecrypt + KeyInit,
 {
-    type KeySize = E::KeySize;
-}
-
-impl<E> NewAead for BcEnc<E>
-where
-    E: BlockSizeUser<BlockSize = U16> + BlockEncrypt + KeyInit,
-{
-    type KeySize = E::KeySize;
-
-    fn new(key: &Key<Self>) -> Self {
-        E::new(key).into()
-    }
-}
-
-impl<E> From<E> for BcEnc<E>
-where
-    E: BlockSizeUser<BlockSize = U16> + BlockEncrypt,
-{
-    fn from(cipher: E) -> Self {
-        Self { enc: cipher }
-    }
-}
-
-struct BcDec<D> {
     dec: D,
 }
 
-impl<D> KeySizeUser for BcDec<D>
-where
-    D: KeyInit,
-{
-    type KeySize = D::KeySize;
-}
-
-impl<D> NewAead for BcDec<D>
-where
-    D: BlockSizeUser<BlockSize = U16> + BlockDecrypt + KeyInit,
-{
-    type KeySize = D::KeySize;
-
-    fn new(key: &Key<Self>) -> Self {
-        D::new(key).into()
-    }
-}
-
-impl<D> From<D> for BcDec<D>
-where
-    D: BlockSizeUser<BlockSize = U16> + BlockDecrypt,
-{
-    fn from(cipher: D) -> Self {
-        Self { dec: cipher }
-    }
-}
 /// COLM authenticated encryption with associated data.
 ///
 /// Representation of COLM0, no intermediate tag generation. (decryption-only)
-pub struct Colm0Dec<E, D> {
+pub struct Colm0Dec<E, D>
+where
+    E: BlockCipher + BlockSizeUser<BlockSize = U16> + BlockEncrypt + KeyInit,
+    D: BlockCipher + BlockSizeUser<BlockSize = U16> + BlockDecrypt + KeyInit,
+{
     enc: BcEnc<E>,
     dec: BcDec<D>,
 }
