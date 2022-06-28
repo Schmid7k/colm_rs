@@ -369,7 +369,7 @@ where
     pub fn new(key: &GenericArray<u8, U16>) -> Self {
         Self {
             enc: BcEnc::new(key),
-            dec: BcDec::from(D),
+            dec: BcDec::new(key),
         }
     }
 
