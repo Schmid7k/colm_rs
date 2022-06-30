@@ -1,7 +1,8 @@
-use colm::colm0::*;
+use colm::colm0::Colm0;
+use aes::{Aes128Enc, Aes128Dec};
 
 #[test]
-fn extensive_test_suite() {
+fn extensive_test() {
     let keys = [
         [0u8; 16],
         [
@@ -72,8 +73,7 @@ fn extensive_test_suite() {
 
     for (n, nonce) in nonces.iter().enumerate() {
         for (k, key) in keys.iter().enumerate() {
-            let enc = Colm0Enc::new(key.into());
-            let dec = Colm0Dec::new(key.into());
+            let colm0 = Colm0::<Aes128Enc, Aes128Dec>::new(key.into());
             for (a, ad) in ad.iter().enumerate() {
                 for p in plaintexts.iter().map(|s| s.as_bytes()) {
                     let size = p.len();
@@ -82,9 +82,9 @@ fn extensive_test_suite() {
                     println!("E+D ");
                     println!("adlen={}", ad.len());
                     println!("len={}", p.len());
-                    let c = enc.seal(p, ad.as_bytes(), nonce);
+                    let c = colm0.seal(p, ad.as_bytes(), nonce);
                     println!("clen={}", c.len());
-                    let m = dec.open(&c, ad.as_bytes(), nonce).expect("LOL");
+                    let m = colm0.open(&c, ad.as_bytes(), nonce).expect("LOL");
 
                     assert!(m == p);
                 }
