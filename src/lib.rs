@@ -392,7 +392,11 @@ impl<B, NonceSize> AeadInPlace for Colm0<B, NonceSize> where B: BlockCipher + Bl
                 block = _mm_xor_si128(block, ldown);
     
                 _mm_storeu_si128(buf.as_ptr() as *mut __m128i, byte_swap(block));
-    
+                /*
+                if *tag != *GenericArray::from_slice(&buf) {
+                    return Err(Error);
+                }
+                */
                 if remaining < 16 {
                     _mm_storeu_si128(buf.as_ptr() as *mut __m128i, byte_swap(checksum));
                     if buf[remaining] != 0x80 { return Err(Error); }
