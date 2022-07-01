@@ -105,3 +105,19 @@ fn extensive_test() {
         nonces.len() * keys.len() * ad.len() * plaintexts.len()
     );
 }
+
+#[test]
+fn something() {
+    let key = [0u8; 16];
+    let nonce = [0u8; 8];
+    let m = "0123456789abcdefg";
+
+    let cipher = Colm0Aes128::new(&key.into());
+    let c = cipher.encrypt(&nonce.into(), m.as_bytes()).expect("");
+
+    println!("{:#02x?}", c);
+
+    let p = cipher.decrypt(&nonce.into(), c.as_ref()).expect("");
+
+    println!("{:#02x?}", p);
+}

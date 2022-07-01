@@ -393,13 +393,13 @@ impl<B, NonceSize> AeadInPlace for Colm0<B, NonceSize> where B: BlockCipher + Bl
     
                 _mm_storeu_si128(buf.as_ptr() as *mut __m128i, byte_swap(block));
     
-                //if remaining < 16 {
-                //    _mm_storeu_si128(buf.as_ptr() as *mut __m128i, byte_swap(checksum));
-                //    assert!(buf[remaining] == 0x80);
-                //    for i in buf.iter().skip(remaining + 1) {
-                //        assert!(*i == 0);
-                //    }
-                //}
+                if remaining < 16 {
+                    _mm_storeu_si128(buf.as_ptr() as *mut __m128i, byte_swap(checksum));
+                    if buf[remaining] != 0x80 { return Err(Error); }
+                    for i in buf.iter().skip(remaining + 1) {
+                        if *i != 0 { return Err(Error); }
+                    }
+                }
                 Ok(())
             }
     }
