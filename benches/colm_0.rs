@@ -1,34 +1,32 @@
-use colm::colm0::Colm0;
+use colm::{Colm0Aes128, NewAead, aead::Aead, AeadInPlace};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use criterion_cycles_per_byte::CyclesPerByte;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use aes::{Aes128Enc, Aes128Dec};
 
 pub const KB: usize = 1024;
 
 fn bench(c: &mut Criterion<CyclesPerByte>) {
     let mut group = c.benchmark_group("colm-0");
     let mut rng = OsRng;
-    let ad = [0u8; 16];
+    let ad = [0u8; 0];
     let nonce = [0u8; 8];
     let mut key = [0u8; 16];
     rng.fill_bytes(&mut key);
-    let cipher = Colm0::<Aes128Enc, Aes128Dec>::new(&key.into());
+    let cipher = Colm0Aes128::new(&key.into());
 
     for size in &[KB, 2 * KB, 4 * KB, 8 * KB, 16 * KB] {
         let mut m = vec![0; *size];
-        let mut c = vec![0; *size + 16];
         rng.fill_bytes(&mut m);
 
         group.throughput(Throughput::Bytes(*size as u64));
 
         group.bench_function(BenchmarkId::new("seal", size), |b| {
-            b.iter(|| cipher.seal(&m, &ad, &nonce));
+            b.iter(|| cipher.encrypt(&nonce.into(), m.as_slice()));
         });
 
         group.bench_function(BenchmarkId::new("seal-into", size), |b| {
-            b.iter(|| cipher.seal_into(&mut c, &m, &ad, &nonce));
+            b.iter(|| cipher.encrypt_in_place_detached(&nonce.into(), &ad, m.as_mut_slice()));
         });
     }
 
