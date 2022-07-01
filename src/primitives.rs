@@ -1,6 +1,6 @@
 use super::arch::*;
 
-/// Byte swap necessary for operation on Intel systems, because they use little-endian encoding in registers.
+/// Byte swap necessary, because of little-endian encoding in x86_64 registers.
 #[inline]
 pub(crate) fn byte_swap(x: __m128i) -> __m128i {
     unsafe {

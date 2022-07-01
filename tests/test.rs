@@ -1,7 +1,8 @@
-use colm::colm0::*;
+use colm::{Colm0Aes128};
+use colm::aead::{Aead, NewAead, Payload};
 
 #[test]
-fn extensive_test_suite() {
+fn extensive_test() {
     let keys = [
         [0u8; 16],
         [
@@ -72,19 +73,26 @@ fn extensive_test_suite() {
 
     for (n, nonce) in nonces.iter().enumerate() {
         for (k, key) in keys.iter().enumerate() {
-            let enc = Colm0Enc::new(key.into());
-            let dec = Colm0Dec::new(key.into());
+            let cipher = Colm0Aes128::new(key.into());
             for (a, ad) in ad.iter().enumerate() {
                 for p in plaintexts.iter().map(|s| s.as_bytes()) {
+                    let payload = Payload {
+                        msg: p,
+                        aad: ad.as_bytes(),
+                    };
                     let size = p.len();
                     println!("Verifying n={}, k={}, a={}, p={}", n, k, a, size);
 
                     println!("E+D ");
                     println!("adlen={}", ad.len());
                     println!("len={}", p.len());
-                    let c = enc.seal(p, ad.as_bytes(), nonce);
+                    let c = cipher.encrypt(nonce.into(), payload).expect("");
                     println!("clen={}", c.len());
-                    let m = dec.open(&c, ad.as_bytes(), nonce).expect("LOL");
+                    let payload = Payload {
+                        msg: &c,
+                        aad: ad.as_bytes(),
+                    };
+                    let m = cipher.decrypt(nonce.into(), payload).expect("");
 
                     assert!(m == p);
                 }

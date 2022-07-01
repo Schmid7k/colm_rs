@@ -11,9 +11,15 @@ criterion-cycles-per-byte = "0.1.2"
 rand = "0.8.5"
 
 [dependencies]
-aes = "0.8.1"
+aead = { version = "0.4.3", default-features = false }
+aes = { version = "0.8.1", optional = true }
 cipher = "0.4.3"
-thiserror = "1.0.31"
+
+[features]
+default = ["aes", "alloc"]
+std = ["aead/std", "alloc"]
+alloc = ["aead/alloc"]
+heapless = ["aead/heapless"]
 
 [profile.bench]
 #opt-level = 3
