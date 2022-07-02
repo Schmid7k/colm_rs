@@ -1,5 +1,5 @@
-use colm::{Colm0Aes128};
 use colm::aead::{Aead, NewAead, Payload};
+use colm::Colm0Aes128;
 
 #[test]
 fn extensive_test() {
@@ -107,7 +107,7 @@ fn extensive_test() {
 }
 
 #[test]
-fn something() {
+fn tag_test() {
     let key = [0u8; 16];
     let nonce = [0u8; 8];
     let m = "0123456789abcdef0";
