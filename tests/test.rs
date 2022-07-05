@@ -1,5 +1,5 @@
-use colm::aead::{Aead, NewAead, Payload};
-use colm::Colm0Aes128;
+use colm_rs::aead::{Aead, NewAead, Payload};
+use colm_rs::Colm0Aes128;
 
 #[test]
 fn extensive_test() {

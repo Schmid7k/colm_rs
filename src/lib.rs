@@ -5,8 +5,6 @@
 //!
 //! ## Security notes
 //!
-//! This crate has been informally verified by an author of the original COLM paper.
-//!
 //! Although encryption and decryption passes the test vector, there is no guarantee
 //! of constant-time operation.
 //!
@@ -14,8 +12,8 @@
 //!
 //! # Usage
 //! ```
-//! use colm::{Colm0Aes128, Nonce}; // If you don't know what block cipher to use with COLM choose the pre-defined type with AES
-//! use colm::aead::{Aead, NewAead};
+//! use colm_rs::{Colm0Aes128, Nonce}; // If you don't know what block cipher to use with COLM choose the pre-defined type with AES
+//! use colm_rs::aead::{Aead, NewAead};
 //!
 //! let key = b"just another key";
 //! let cipher = Colm0Aes128::new(key.into());
@@ -34,8 +32,8 @@
 //! ## Usage with AAD
 //! COLM can authenticate additional data that is not encrypted alongside with the ciphertext.
 //! ```
-//! use colm::{Colm0Aes128, Nonce}; // If you don't know what block cipher to use with COLM choose the pre-defined type with AES
-//! use colm::aead::{Aead, NewAead, Payload};
+//! use colm_rs::{Colm0Aes128, Nonce}; // If you don't know what block cipher to use with COLM choose the pre-defined type with AES
+//! use colm_rs::aead::{Aead, NewAead, Payload};
 //!
 //! let key = b"just another key";
 //! let cipher = Colm0Aes128::new(key.into());
@@ -79,9 +77,9 @@
 //! ```
 //! # #[cfg(feature = "heapless")]
 //! # {
-//! use colm::{Colm0Aes128, Nonce}; // If you don't know what block cipher to use with COLM choose the pre-defined type with AES
-//! use deoxys::aead::{AeadInPlace, NewAead};
-//! use deoxys::aead::heapless::Vec;
+//! use colm_rs::{Colm0Aes128, Nonce}; // If you don't know what block cipher to use with COLM choose the pre-defined type with AES
+//! use colm_rs::aead::{AeadInPlace, NewAead};
+//! use colm_rs::aead::heapless::Vec;
 //!
 //! let key = b"just another key";
 //! let cipher = Colm0Aes128::new(key,into());
@@ -461,10 +459,23 @@ where
             let mut v: __m128i;
             let mut delta: __m128i;
             let mut block: __m128i;
+            let (mut delta1, mut delta2, mut delta3, mut delta4): (
+                __m128i,
+                __m128i,
+                __m128i,
+                __m128i,
+            );
+            let (mut block1, mut block2, mut block3, mut block4): (
+                __m128i,
+                __m128i,
+                __m128i,
+                __m128i,
+            );
+
             let mut buf = [0u8; 16];
             let mut len = ad.len();
-            let mut block_end = 16;
             let mut block_start = 0;
+            let mut block_end = 16;
             let mut npub = [0u8; 8];
 
             npub[..].copy_from_slice(nonce);
@@ -475,18 +486,52 @@ where
             v = _mm_xor_si128(v, delta);
             v = self.bc_encrypt(v);
 
-            // MAC full length blocks
+            delta4 = delta;
+            // MAC blocks in parallel
+            while len >= 16 * 4 {
+                delta1 = gf128_mul2(&delta4);
+                delta2 = gf128_mul2(&delta1);
+                delta3 = gf128_mul2(&delta2);
+                delta4 = gf128_mul2(&delta3);
+
+                block1 = byte_swap(_mm_loadu_si128(
+                    ad[block_start..block_end].as_ptr() as *const __m128i
+                ));
+                block2 = byte_swap(_mm_loadu_si128(
+                    ad[block_start + 1..block_end + 1].as_ptr() as *const __m128i
+                ));
+                block3 = byte_swap(_mm_loadu_si128(
+                    ad[block_start + 1..block_end + 1].as_ptr() as *const __m128i
+                ));
+                block4 = byte_swap(_mm_loadu_si128(
+                    ad[block_start + 1..block_end + 1].as_ptr() as *const __m128i
+                ));
+
+                (block1, block2, block3, block4) = self.bc_encrypt4(block1, block2, block3, block4);
+
+                v = _mm_xor_si128(
+                    _mm_xor_si128(_mm_xor_si128(_mm_xor_si128(v, block1), block2), block3),
+                    block4,
+                );
+
+                len -= 4 * 16;
+                block_end += 4 * 16;
+                block_start += 4 * 16;
+            }
+
+            delta = delta4;
+            // MAC full blocks
             while len >= 16 {
                 delta = gf128_mul2(&delta);
                 block = _mm_loadu_si128(ad[block_start..block_end].as_ptr() as *const __m128i);
                 block = byte_swap(block);
                 block = _mm_xor_si128(block, delta);
                 block = self.bc_encrypt(block);
-                v = _mm_xor_si128(v, block);
+                v = _mm_xor_si128(block, v);
 
                 len -= 16;
-                block_end += 16;
                 block_start += 16;
+                block_end += 16;
             }
 
             if len > 0 {
@@ -519,5 +564,31 @@ where
         let mut tmp = u8x16::from(byte_swap(_in));
         self.cipher.decrypt_block(tmp.as_mut_array().into());
         byte_swap(tmp.into())
+    }
+
+    #[inline]
+    fn bc_encrypt4(
+        &self,
+        block1: __m128i,
+        block2: __m128i,
+        block3: __m128i,
+        block4: __m128i,
+    ) -> (__m128i, __m128i, __m128i, __m128i) {
+        let mut tmp1 = u8x16::from(byte_swap(block1));
+        let mut tmp2 = u8x16::from(byte_swap(block2));
+        let mut tmp3 = u8x16::from(byte_swap(block3));
+        let mut tmp4 = u8x16::from(byte_swap(block4));
+        let blocks = [
+            tmp1.as_mut_array(),
+            tmp2.as_mut_array(),
+            tmp3.as_mut_array(),
+            tmp4.as_mut_array(),
+        ];
+
+        for block in blocks {
+            self.cipher.encrypt_block(block.into());
+        }
+
+        byte_swap4(tmp1.into(), tmp2.into(), tmp3.into(), tmp4.into())
     }
 }

@@ -9,6 +9,16 @@ pub(crate) fn byte_swap(x: __m128i) -> __m128i {
     }
 }
 
+#[inline]
+pub(crate) fn byte_swap4(
+    b1: __m128i,
+    b2: __m128i,
+    b3: __m128i,
+    b4: __m128i,
+) -> (__m128i, __m128i, __m128i, __m128i) {
+    (byte_swap(b1), byte_swap(b2), byte_swap(b3), byte_swap(b4))
+}
+
 /// Polynomial multiplication with 2 in the Galois field G^128
 #[inline]
 pub(crate) fn gf128_mul2(x: &__m128i) -> __m128i {
