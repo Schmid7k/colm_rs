@@ -211,13 +211,22 @@ where
             let mut buf = [0u8; 16];
             let mut tag = [0u8; 16];
 
-            let (mut w, mut block, mut lup, mut ldown, mut inb): (
-                __m128i,
+            let (mut w, mut block, mut lup, mut ldown): (__m128i, __m128i, __m128i, __m128i);
+
+            let (mut lup1, mut lup2, mut lup3, mut lup4): (__m128i, __m128i, __m128i, __m128i);
+            let (mut ldown1, mut ldown2, mut ldown3, mut ldown4): (
                 __m128i,
                 __m128i,
                 __m128i,
                 __m128i,
             );
+            let (mut block1, mut block2, mut block3, mut block4): (
+                __m128i,
+                __m128i,
+                __m128i,
+                __m128i,
+            );
+
             let mut checksum = _mm_setzero_si128();
             let mut ll = _mm_setzero_si128();
 
@@ -233,19 +242,98 @@ where
             // mac AD + nonce
             w = self.mac(associated_data, nonce, &ll);
 
-            // Encryption of complete blocks
+            lup4 = lup;
+            ldown4 = ldown;
+
+            // Parallel encryption of complete blocks
+            while remaining > 4 * 16 {
+                lup1 = gf128_mul2(&lup4);
+                lup2 = gf128_mul2(&lup1);
+                lup3 = gf128_mul2(&lup2);
+                lup4 = gf128_mul2(&lup3);
+
+                block1 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start..block_end].as_ptr() as *const __m128i
+                ));
+                block2 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start + 16..block_end + 16].as_ptr() as *const __m128i,
+                ));
+                block3 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start + 32..block_end + 32].as_ptr() as *const __m128i,
+                ));
+                block4 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start + 48..block_end + 48].as_ptr() as *const __m128i,
+                ));
+
+                checksum = _mm_xor_si128(
+                    _mm_xor_si128(
+                        _mm_xor_si128(_mm_xor_si128(checksum, block1), block2),
+                        block3,
+                    ),
+                    block4,
+                );
+
+                block1 = _mm_xor_si128(block1, lup1);
+                block2 = _mm_xor_si128(block2, lup2);
+                block3 = _mm_xor_si128(block3, lup3);
+                block4 = _mm_xor_si128(block4, lup4);
+
+                (block1, block2, block3, block4) = self.bc_encrypt4(block1, block2, block3, block4);
+
+                ldown1 = gf128_mul2(&ldown4);
+                ldown2 = gf128_mul2(&ldown1);
+                ldown3 = gf128_mul2(&ldown2);
+                ldown4 = gf128_mul2(&ldown3);
+
+                rho(&mut block1, &mut w);
+                rho(&mut block2, &mut w);
+                rho(&mut block3, &mut w);
+                rho(&mut block4, &mut w);
+
+                (block1, block2, block3, block4) = self.bc_encrypt4(block1, block2, block3, block4);
+
+                block1 = _mm_xor_si128(block1, ldown1);
+                block2 = _mm_xor_si128(block2, ldown2);
+                block3 = _mm_xor_si128(block3, ldown3);
+                block4 = _mm_xor_si128(block4, ldown4);
+
+                _mm_storeu_si128(
+                    buffer[block_start..block_end].as_ptr() as *mut __m128i,
+                    byte_swap(block1),
+                );
+                _mm_storeu_si128(
+                    buffer[block_start + 16..block_end + 16].as_ptr() as *mut __m128i,
+                    byte_swap(block2),
+                );
+                _mm_storeu_si128(
+                    buffer[block_start + 32..block_end + 32].as_ptr() as *mut __m128i,
+                    byte_swap(block3),
+                );
+                _mm_storeu_si128(
+                    buffer[block_start + 48..block_end + 48].as_ptr() as *mut __m128i,
+                    byte_swap(block4),
+                );
+
+                block_start += 16 * 4;
+                block_end += 16 * 4;
+                remaining -= 16 * 4;
+            }
+
+            lup = lup4;
+            ldown = ldown4;
+
             while remaining > 16 {
                 lup = gf128_mul2(&lup);
                 ldown = gf128_mul2(&ldown);
 
                 // Load current complete block
-                inb = _mm_loadu_si128(buffer[block_start..block_end].as_ptr() as *const __m128i);
-                inb = byte_swap(inb);
+                block = _mm_loadu_si128(buffer[block_start..block_end].as_ptr() as *const __m128i);
+                block = byte_swap(block);
                 // XOR between current checksum and current complete block
-                checksum = _mm_xor_si128(checksum, inb);
+                checksum = _mm_xor_si128(checksum, block);
 
                 // Start of actual COLM encryption procedure
-                block = _mm_xor_si128(inb, lup);
+                block = _mm_xor_si128(block, lup);
                 block = self.bc_encrypt(block);
 
                 rho(&mut block, &mut w);
@@ -280,11 +368,11 @@ where
                 ldown = gf128_mul7(&ldown);
             }
 
-            // Load current (maybe partial) block into inb
-            inb = _mm_loadu_si128(buf.as_ptr() as *const __m128i);
-            inb = byte_swap(inb);
+            // Load current (maybe partial) block
+            block = _mm_loadu_si128(buf.as_ptr() as *const __m128i);
+            block = byte_swap(block);
             // XOR between current checksum and current (maybe partial) block
-            checksum = _mm_xor_si128(checksum, inb);
+            checksum = _mm_xor_si128(checksum, block);
 
             block = _mm_xor_si128(checksum, lup);
             block = self.bc_encrypt(block);
@@ -340,13 +428,22 @@ where
     ) -> Result<(), Error> {
         unsafe {
             let buf = [0u8; 16];
-            let (mut w, mut block, mut lup, mut ldown, mut inb): (
-                __m128i,
+
+            let (mut lup1, mut lup2, mut lup3, mut lup4): (__m128i, __m128i, __m128i, __m128i);
+            let (mut ldown1, mut ldown2, mut ldown3, mut ldown4): (
                 __m128i,
                 __m128i,
                 __m128i,
                 __m128i,
             );
+            let (mut block1, mut block2, mut block3, mut block4): (
+                __m128i,
+                __m128i,
+                __m128i,
+                __m128i,
+            );
+
+            let (mut w, mut block, mut lup, mut ldown): (__m128i, __m128i, __m128i, __m128i);
             let mut checksum = _mm_setzero_si128();
             let mut ll = _mm_setzero_si128();
 
@@ -365,14 +462,93 @@ where
             // mac AD + nonce
             w = self.mac(associated_data, nonce, &ll);
 
-            // Decryption of complete blocks
+            lup4 = lup;
+            ldown4 = ldown;
+            // Parallel decryption of complete blocks
+            while remaining > 16 * 4 {
+                ldown1 = gf128_mul2(&ldown4);
+                ldown2 = gf128_mul2(&ldown1);
+                ldown3 = gf128_mul2(&ldown2);
+                ldown4 = gf128_mul2(&ldown3);
+
+                block1 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start..block_end].as_ptr() as *const __m128i
+                ));
+                block2 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start + 16..block_end + 16].as_ptr() as *const __m128i,
+                ));
+                block3 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start + 32..block_end + 32].as_ptr() as *const __m128i,
+                ));
+                block4 = byte_swap(_mm_loadu_si128(
+                    buffer[block_start + 48..block_end + 48].as_ptr() as *const __m128i,
+                ));
+
+                block1 = _mm_xor_si128(block1, ldown1);
+                block2 = _mm_xor_si128(block2, ldown2);
+                block3 = _mm_xor_si128(block3, ldown3);
+                block4 = _mm_xor_si128(block4, ldown4);
+
+                (block1, block2, block3, block4) = self.bc_decrypt4(block1, block2, block3, block4);
+
+                lup1 = gf128_mul2(&lup4);
+                lup2 = gf128_mul2(&lup1);
+                lup3 = gf128_mul2(&lup2);
+                lup4 = gf128_mul2(&lup3);
+
+                rho_inv(&mut block1, &mut w);
+                rho_inv(&mut block2, &mut w);
+                rho_inv(&mut block3, &mut w);
+                rho_inv(&mut block4, &mut w);
+
+                (block1, block2, block3, block4) = self.bc_decrypt4(block1, block2, block3, block4);
+
+                block1 = _mm_xor_si128(block1, lup1);
+                block2 = _mm_xor_si128(block2, lup2);
+                block3 = _mm_xor_si128(block3, lup3);
+                block4 = _mm_xor_si128(block4, lup4);
+
+                checksum = _mm_xor_si128(
+                    _mm_xor_si128(
+                        _mm_xor_si128(_mm_xor_si128(checksum, block1), block2),
+                        block3,
+                    ),
+                    block4,
+                );
+
+                _mm_storeu_si128(
+                    buffer[block_start..block_end].as_ptr() as *mut __m128i,
+                    byte_swap(block1),
+                );
+                _mm_storeu_si128(
+                    buffer[block_start + 16..block_end + 16].as_ptr() as *mut __m128i,
+                    byte_swap(block2),
+                );
+                _mm_storeu_si128(
+                    buffer[block_start + 32..block_end + 32].as_ptr() as *mut __m128i,
+                    byte_swap(block3),
+                );
+                _mm_storeu_si128(
+                    buffer[block_start + 48..block_end + 48].as_ptr() as *mut __m128i,
+                    byte_swap(block4),
+                );
+
+                block_start += 16 * 4;
+                block_end += 16 * 4;
+                remaining -= 16 * 4;
+            }
+
+            lup = lup4;
+            ldown = ldown4;
+
             while remaining > 16 {
                 lup = gf128_mul2(&lup);
                 ldown = gf128_mul2(&ldown);
 
-                inb = _mm_loadu_si128(buffer[block_start..block_end].as_ptr() as *const __m128i);
-                inb = byte_swap(inb);
-                block = _mm_xor_si128(inb, ldown);
+                block = byte_swap(_mm_loadu_si128(
+                    buffer[block_start..block_end].as_ptr() as *const __m128i
+                ));
+                block = _mm_xor_si128(block, ldown);
                 block = self.bc_decrypt(block);
 
                 rho_inv(&mut block, &mut w);
@@ -398,9 +574,10 @@ where
                 ldown = gf128_mul7(&ldown);
             }
 
-            inb = _mm_loadu_si128(buffer[block_start..].as_ptr() as *const __m128i);
-            inb = byte_swap(inb);
-            block = _mm_xor_si128(inb, ldown);
+            block = byte_swap(_mm_loadu_si128(
+                buffer[block_start..].as_ptr() as *const __m128i
+            ));
+            block = _mm_xor_si128(block, ldown);
             block = self.bc_decrypt(block);
 
             rho_inv(&mut block, &mut w);
@@ -427,7 +604,7 @@ where
 
             _mm_storeu_si128(buf.as_ptr() as *mut __m128i, byte_swap(block));
 
-            // Checking tag correctness
+            // Check tag correctness
             if tag[16 - remaining..] != GenericArray::from(buf)[..remaining] {
                 return Err(Error);
             }
@@ -498,13 +675,13 @@ where
                     ad[block_start..block_end].as_ptr() as *const __m128i
                 ));
                 block2 = byte_swap(_mm_loadu_si128(
-                    ad[block_start + 1..block_end + 1].as_ptr() as *const __m128i
+                    ad[block_start + 16..block_end + 16].as_ptr() as *const __m128i,
                 ));
                 block3 = byte_swap(_mm_loadu_si128(
-                    ad[block_start + 1..block_end + 1].as_ptr() as *const __m128i
+                    ad[block_start + 32..block_end + 32].as_ptr() as *const __m128i,
                 ));
                 block4 = byte_swap(_mm_loadu_si128(
-                    ad[block_start + 1..block_end + 1].as_ptr() as *const __m128i
+                    ad[block_start + 48..block_end + 48].as_ptr() as *const __m128i,
                 ));
 
                 (block1, block2, block3, block4) = self.bc_encrypt4(block1, block2, block3, block4);
@@ -587,6 +764,32 @@ where
 
         for block in blocks {
             self.cipher.encrypt_block(block.into());
+        }
+
+        byte_swap4(tmp1.into(), tmp2.into(), tmp3.into(), tmp4.into())
+    }
+
+    #[inline]
+    fn bc_decrypt4(
+        &self,
+        block1: __m128i,
+        block2: __m128i,
+        block3: __m128i,
+        block4: __m128i,
+    ) -> (__m128i, __m128i, __m128i, __m128i) {
+        let mut tmp1 = u8x16::from(byte_swap(block1));
+        let mut tmp2 = u8x16::from(byte_swap(block2));
+        let mut tmp3 = u8x16::from(byte_swap(block3));
+        let mut tmp4 = u8x16::from(byte_swap(block4));
+        let blocks = [
+            tmp1.as_mut_array(),
+            tmp2.as_mut_array(),
+            tmp3.as_mut_array(),
+            tmp4.as_mut_array(),
+        ];
+
+        for block in blocks {
+            self.cipher.decrypt_block(block.into());
         }
 
         byte_swap4(tmp1.into(), tmp2.into(), tmp3.into(), tmp4.into())

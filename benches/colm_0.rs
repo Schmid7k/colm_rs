@@ -21,11 +21,11 @@ fn bench(c: &mut Criterion<CyclesPerByte>) {
 
         group.throughput(Throughput::Bytes(*size as u64));
 
-        group.bench_function(BenchmarkId::new("seal", size), |b| {
+        group.bench_function(BenchmarkId::new("encrypt", size), |b| {
             b.iter(|| cipher.encrypt(&nonce.into(), m.as_slice()));
         });
 
-        group.bench_function(BenchmarkId::new("seal-into", size), |b| {
+        group.bench_function(BenchmarkId::new("encrypt-into", size), |b| {
             b.iter(|| cipher.encrypt_in_place_detached(&nonce.into(), &ad, m.as_mut_slice()));
         });
     }

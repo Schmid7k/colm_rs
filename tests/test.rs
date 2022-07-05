@@ -110,7 +110,7 @@ fn extensive_test() {
 fn tag_test() {
     let key = [0u8; 16];
     let nonce = [0u8; 8];
-    let m = "0123456789abcdef0";
+    let m = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0";
 
     let cipher = Colm0Aes128::new(&key.into());
     let c = cipher.encrypt(&nonce.into(), m.as_bytes()).expect("");
