@@ -37,6 +37,11 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [[bench]]
-name = "colm-0"
-path = "benches/colm_0.rs"
+name = "colm0enc"
+path = "benches/colm0_enc.rs"
+harness = false
+
+[[bench]]
+name = "colm0dec"
+path = "benches/colm0_dec.rs"
 harness = false
