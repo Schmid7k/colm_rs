@@ -1,6 +1,6 @@
 use super::arch::*;
 
-/// Byte swap necessary, because of little-endian encoding in x86_64 registers.
+/// Byte swap necessary, because of little-endian encoding in x86_64 memory.
 #[inline]
 pub(crate) fn byte_swap(x: __m128i) -> __m128i {
     unsafe {
@@ -32,7 +32,7 @@ pub(crate) fn gf128_mul2(x: &__m128i) -> __m128i {
         let x2 = _mm_or_si128(
             // Bitwise OR between
             _mm_slli_epi64(*x, 1), // x shifted left by 1 (equals multiplication by 2)
-            _mm_srli_epi64(_mm_slli_si128::<8>(*x), 63), // and x shifted left by 8 and shifted right by 63.
+            _mm_srli_epi64(_mm_slli_si128(*x, 8), 63), // and x shifted left by 8 and shifted right by 63.
         );
         // Return bitwise XOR of x2 with the bitwise AND between the irreducible polynomial and mask
         // Rules out the reducing polynomial if mask is 0
